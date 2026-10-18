@@ -9,9 +9,121 @@ import sys
 import tarfile
 import tempfile
 import unittest
+from unittest.mock import patch
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def stage_source(source, destination):
+    """Copy the current flat source layout, without scanning unrelated subtrees.
+
+    Keep new build inputs explicit here. No Git metadata or generated egg-info
+    is needed, so the same selection works on an unpacked source distribution.
+    """
+    required = (
+        "pyproject.toml", "MANIFEST.in", "LICENSE", "main.py",
+        "README.md", "AGENTS.md", "CONTRIBUTING.md", "requirements-test.txt",
+        ".github/workflows/checks.yml", "pygame_spiel/__init__.py",
+        "pygame_spiel/bots/__init__.py", "pygame_spiel/games/__init__.py",
+        "docs/installation.md", "docs/get_started.md", "docs/extending.md",
+        "tests/test_packaging.py", "pygame_spiel/images/tic_tac_toe/x_image.png",
+        "pygame_spiel/images/breakthrough/chess_board.png",
+        "pygame_spiel/images/breakthrough/pawn_black.png",
+        "pygame_spiel/images/breakthrough/pawn_white.png",
+        "pygame_spiel/images/breakthrough/pawn_white_selected.png",
+    )
+    missing = [name for name in required if not (source / name).is_file()]
+    if missing:
+        raise FileNotFoundError("Required package-check inputs missing: " + ", ".join(missing))
+    selected = {Path(name) for name in required}
+    for pattern in ("pygame_spiel/*.py", "pygame_spiel/bots/*.py",
+                    "pygame_spiel/games/*.py", "pygame_spiel/images/breakthrough/*.png",
+                    "pygame_spiel/images/tic_tac_toe/*.png", "docs/*.md", "tests/*.py"):
+        selected.update(path.relative_to(source) for path in source.glob(pattern) if path.is_file())
+    # Select before copying: never copy an environment and remove it afterwards.
+    for relative in sorted(selected):
+        target = destination / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source / relative, target)
+    return tuple(sorted(selected))
+
+
+class StagingTests(unittest.TestCase):
+    def make_source(self, root):
+        # Independent tiny fixture, with bytes that must survive unchanged.
+        names = (
+            "pyproject.toml", "MANIFEST.in", "LICENSE", "main.py", "README.md",
+            "AGENTS.md", "CONTRIBUTING.md", "requirements-test.txt",
+            ".github/workflows/checks.yml", "pygame_spiel/__init__.py",
+            "pygame_spiel/bots/__init__.py", "pygame_spiel/bots/example.py",
+            "pygame_spiel/games/__init__.py", "pygame_spiel/games/example.py",
+            "pygame_spiel/main.py", "docs/installation.md", "docs/get_started.md",
+            "docs/extending.md", "docs/next_milestone.md", "tests/test_packaging.py",
+            "tests/support.py", "pygame_spiel/images/tic_tac_toe/x_image.png",
+            "pygame_spiel/images/breakthrough/chess_board.png",
+            "pygame_spiel/images/breakthrough/pawn_black.png",
+            "pygame_spiel/images/breakthrough/pawn_white.png",
+            "pygame_spiel/images/breakthrough/pawn_white_selected.png",
+        )
+        expected = {}
+        for name in names:
+            path = root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            expected[name] = (name + "\r\n").encode() + b"\x00\xff"
+            path.write_bytes(expected[name])
+        return expected
+
+    def test_selected_inputs_preserve_bytes_without_visiting_local_artifacts(self):
+        for git_checkout in (False, True):
+            with self.subTest(git_checkout=git_checkout), tempfile.TemporaryDirectory() as tmp:
+                source, destination = Path(tmp) / "source", Path(tmp) / "staged"
+                expected = self.make_source(source)
+                if git_checkout:
+                    (source / ".git").write_text("gitdir: unused")
+                excluded = [source / name for name in (
+                    ".venv", "local-evidence", ".cache", "pygame_spiel/__pycache__",
+                    "pygame_spiel/.venv", "docs/.cache", "tests/local-artifacts",
+                    "pygame_spiel/images/local-artifacts")]
+                for directory in excluded:
+                    (directory / "site-packages").mkdir(parents=True)
+                    (directory / "site-packages/marker.py").write_bytes(b"excluded")
+                (source / "unrelated-report.md").write_text("not maintained documentation")
+                (source / "PKG-INFO").write_text("generated source archive metadata")
+                scandir = os.scandir
+                copy2 = shutil.copy2
+                def checked_scandir(path):
+                    path = Path(path).resolve()
+                    if any(path == directory or directory in path.parents for directory in excluded):
+                        raise AssertionError(f"Traversed excluded directory: {path}")
+                    return scandir(path)
+                def checked_copy(path, target):
+                    self.assertIn(Path(path).relative_to(source).as_posix(), expected)
+                    return copy2(path, target)
+                with patch("os.scandir", side_effect=checked_scandir), \
+                        patch("shutil.copy2", side_effect=checked_copy), \
+                        patch("subprocess.run", side_effect=AssertionError("Staging must not run Git/tools")):
+                    selected = stage_source(source, destination)
+                self.assertEqual({path.as_posix() for path in selected}, set(expected))
+                actual = {path.relative_to(destination).as_posix(): path.read_bytes()
+                          for path in destination.rglob("*") if path.is_file()}
+                self.assertEqual(actual, expected)
+                self.assertEqual((source / ".git").exists(), git_checkout)
+
+    def test_missing_required_inputs_fail_before_copying(self):
+        for missing in ("pyproject.toml", "MANIFEST.in", "LICENSE", "README.md",
+                        "docs/get_started.md", "pygame_spiel/games/__init__.py",
+                        "pygame_spiel/images/breakthrough/pawn_black.png",
+                        "requirements-test.txt", ".github/workflows/checks.yml",
+                        "tests/test_packaging.py", "main.py"):
+            with self.subTest(missing=missing), tempfile.TemporaryDirectory() as tmp:
+                source, destination = Path(tmp) / "source", Path(tmp) / "staged"
+                self.make_source(source)
+                (source / missing).unlink()
+                with self.assertRaisesRegex(FileNotFoundError, "Required package-check inputs missing") as error:
+                    stage_source(source, destination)
+                self.assertIn(missing, str(error.exception))
+                self.assertFalse(destination.exists())
 
 
 class PackagingTests(unittest.TestCase):
@@ -19,8 +131,7 @@ class PackagingTests(unittest.TestCase):
         # Copy source: build_meta may write build/ and egg-info beside its input.
         with tempfile.TemporaryDirectory() as tmp:
             staging = Path(tmp) / "source"
-            shutil.copytree(ROOT, staging, ignore=shutil.ignore_patterns(
-                ".git", "__pycache__", "*.egg-info", "build", "dist"))
+            inputs = stage_source(ROOT, staging)
             output = Path(tmp) / "artifacts"
             output.mkdir()
             script = """
@@ -50,8 +161,7 @@ backend.build_wheel(destination)
                 self.assertIn("pygame_spiel_download = pygame_spiel.downloads:main", entries)
                 self.assertEqual(archive.read(next(n for n in names if n.endswith("/licenses/LICENSE"))),
                                  (ROOT / "LICENSE").read_bytes())
-                expected = {p.relative_to(ROOT).as_posix() for p in (ROOT / "pygame_spiel").rglob("*")
-                            if p.is_file() and p.suffix in (".py", ".png")}
+                expected = {p.as_posix() for p in inputs if p.parts[0] == "pygame_spiel"}
                 actual = {n for n in names if n.startswith("pygame_spiel/")}
                 self.assertEqual(actual, expected)
                 for name in expected:
@@ -63,13 +173,11 @@ backend.build_wheel(destination)
                 members = archive.getmembers()
                 prefix = members[0].name.split("/")[0]
                 distributed = {m.name.removeprefix(prefix + "/") for m in members if m.isfile()}
-                for path in [*ROOT.glob("*.md"), *ROOT.glob("docs/**/*.md"),
-                             *ROOT.glob("tests/*.py"), ROOT / "requirements-test.txt",
-                             ROOT / "main.py", ROOT / ".github/workflows/checks.yml"]:
-                    name = path.relative_to(ROOT).as_posix()
+                for relative in inputs:
+                    name = relative.as_posix()
+                    path = ROOT / relative
                     self.assertIn(name, distributed)
-                    self.assertEqual(archive.extractfile(prefix + "/" + name).read().replace(b"\r\n", b"\n"),
-                                     path.read_bytes().replace(b"\r\n", b"\n"), name)
+                    self.assertEqual(archive.extractfile(prefix + "/" + name).read(), path.read_bytes(), name)
                 self.assertEqual(BytesParser().parsebytes(archive.extractfile(prefix + "/PKG-INFO").read())
                                  ["Requires-Python"], ">=3.10")
                 # Archives are produced from this staging tree; reject traversal before extraction.
@@ -81,9 +189,13 @@ backend.build_wheel(destination)
                 archive.extractall(extracted, **({"filter": "data"} if hasattr(tarfile, "data_filter") else {}))
             rebuilt = Path(tmp) / "rebuilt"
             rebuilt.mkdir()
+            source_archive = extracted / prefix
+            self.assertFalse((source_archive / ".git").exists())
+            restaged = Path(tmp) / "from-sdist"
+            self.assertEqual(stage_source(source_archive, restaged), inputs)
             result = subprocess.run([sys.executable, "-B", "-c",
                                      "import setuptools.build_meta as b, sys; b.build_wheel(sys.argv[1])",
-                                     str(rebuilt)], cwd=extracted / prefix, env=env,
+                                     str(rebuilt)], cwd=restaged, env=env,
                                     capture_output=True, text=True, timeout=120)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertEqual(wheel.read_bytes(), (rebuilt / wheel.name).read_bytes())
@@ -102,8 +214,8 @@ for name in sys.argv[2:]:
     assert asset(name).read_bytes().startswith(b'\x89PNG')
 ModelPaths()
 """
-            images = sorted(p.relative_to(ROOT / "pygame_spiel/images").as_posix()
-                            for p in (ROOT / "pygame_spiel/images").rglob("*.png"))
+            images = sorted(p.relative_to("pygame_spiel/images").as_posix()
+                            for p in inputs if p.suffix == ".png")
             result = subprocess.run([sys.executable, "-B", "-c", code, str(wheel), *images],
                                     cwd=tmp, capture_output=True, text=True, timeout=15)
             self.assertEqual(result.returncode, 0, result.stderr)

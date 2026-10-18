@@ -13,6 +13,11 @@ Run from the repository root. Discovery executes each `test_*.py` once; do not
 import TestCase classes into another test module. Tests check that imports target
 this checkout. The suite builds wheel/sdist artifacts in temporary copies without
 installing the application, resolving runtime dependencies or contacting a server.
+Staging selects required build files and the current package, image, documentation
+and test directories before copying; local environments, caches and unrelated root
+artifacts are not traversed or copied. The same staging check runs on the unpacked
+source archive without Git. New source/data directories need an explicit selection
+in `tests/test_packaging.py`.
 It checks packaged source/assets/license, metadata, ZIP resource lookup, a source
 archive roundtrip, documentation links/example syntax and explicit consumer doubles.
 Build tests need the declared setuptools/wheel versions. A missing tool is a setup
