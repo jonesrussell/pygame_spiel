@@ -19,7 +19,9 @@ artifacts are not traversed or copied. The same staging check runs on the unpack
 source archive without Git. New source/data directories need an explicit selection
 in `tests/test_packaging.py`.
 It checks packaged source/assets/license, metadata, ZIP resource lookup, a source
-archive roundtrip, documentation links/example syntax and explicit consumer doubles.
+archive roundtrip, documentation links/example syntax, immutable configuration,
+controller/display lifetime and explicit backend doubles. CLI help and pure imports
+are guarded against runtime backend imports.
 Build tests need the declared setuptools/wheel versions. A missing tool is a setup
 failure, not a skipped successful package check.
 

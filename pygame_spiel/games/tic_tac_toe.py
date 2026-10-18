@@ -1,14 +1,13 @@
 import typing as t
-import pygame
 
 from pygame_spiel.games import base
 
 
 class TicTacToe(base.Game):
-    def __init__(self, name, current_player):
-        super().__init__(name, current_player)
-
-        self._text_font = pygame.font.SysFont("Arial", 30)
+    def __init__(self, config, registered_bots=None):
+        if config.game.name != "tic_tac_toe":
+            raise ValueError("TicTacToe requires a tic_tac_toe GameConfig")
+        super().__init__(config, registered_bots)
 
         # TicTacToe vertical/horizontal lines
         self._line_h1_x_start, self._line_h1_y_start = 0, 200
@@ -19,8 +18,6 @@ class TicTacToe(base.Game):
         self._line_v1_x_end, self._line_v1_y_end = 200, 600
         self._line_v2_x_start, self._line_v2_y_start = 400, 0
         self._line_v2_x_end, self._line_v2_y_end = 400, 600
-
-        self._x_image = self._load_image("tic_tac_toe/x_image.png")
 
         self._quadrant_pos_map_x = [
             (20, 20),
@@ -47,10 +44,10 @@ class TicTacToe(base.Game):
 
         self._list_x_pos, self._list_o_pos = [], []
 
-    def _get_quadrant(self, x: int, y: int) -> int:
+    def _get_quadrant(self, x: int, y: int) -> t.Optional[int]:
         """
         Returns the quadrant index given the x,y coordinates in the board.
-        The quandrand indices are numbered 0 to 9 starting from top-left to
+        The quadrant indices are numbered 0 to 8 starting from top-left to
         bottom-right:
         0 1 2
         3 4 5
@@ -65,29 +62,15 @@ class TicTacToe(base.Game):
             y (int): y coordinate
 
         Returns:
-            index (int): quadrant index at the x,y coordinates
+            index (int or None): quadrant index, or None outside the board
         """
-        if y <= 200:
-            if x <= 200:
-                return 0
-            elif x > 200 and x <= 400:
-                return 1
-            else:
-                return 2
-        elif y > 200 and y <= 400:
-            if x <= 200:
-                return 3
-            elif x > 200 and x <= 400:
-                return 4
-            else:
-                return 5
-        else:
-            if x <= 200:
-                return 6
-            elif x > 200 and x <= 400:
-                return 7
-            else:
-                return 8
+        if not (0 <= x < 600 and 0 <= y < 600):
+            return None
+        return (y // 200) * 3 + x // 200
+
+    def _load_assets(self):
+        self._text_font = self._pygame.font.SysFont("Arial", 30)
+        self._x_image = self._load_image("tic_tac_toe/x_image.png")
 
     def _draw_text(self, text: str, text_col: t.Tuple[int, int, int], x: int, y: int):
         """
@@ -96,7 +79,7 @@ class TicTacToe(base.Game):
 
         Parameters:
             text (str): text to visualize
-            text_col (tuple): text's color in the format (red, blue, green)
+            text_col (tuple): text's color in the format (red, green, blue)
             x (int): x coordinate
             y (int): y coordinate
         """
@@ -104,21 +87,23 @@ class TicTacToe(base.Game):
         self._screen.blit(img, (x, y))
 
     def play(self, mouse_pos, mouse_pressed):
-        if self._current_player == 0 and (mouse_pressed[0]):
-            action = self._get_quadrant(mouse_pos[0], mouse_pos[1])
-            if self._quadrant_pos_map_x[action] not in self._list_x_pos:
-                self._state.apply_action(action)
-                self._bots[1].inform_action(self._state, self._current_player, action)
-                if self._quadrant_pos_map_x[action] not in self._list_x_pos:
+        pygame = self._pygame
+        if not self._state.is_terminal():
+            player = self._current_player
+            action = None
+            if self._is_human():
+                if mouse_pressed[0]:
+                    selected = self._get_quadrant(*mouse_pos)
+                    if selected in self._state.legal_actions():
+                        action = selected
+            else:
+                action = self._bots[player].step(self._state)
+            if action is not None:
+                self._apply_action(action)
+                if player == 0:
                     self._list_x_pos.append(self._quadrant_pos_map_x[action])
-        elif self._current_player == 1:
-            action = self._bots[1].step(self._state)
-            if self._quadrant_pos_map_circle[action] not in self._list_o_pos:
-                self._state.apply_action(action)
-                if self._quadrant_pos_map_circle[action] not in self._list_o_pos:
+                else:
                     self._list_o_pos.append(self._quadrant_pos_map_circle[action])
-
-        self._current_player = self._state.current_player()
 
         # Visualization
         self._screen.fill("white")
@@ -157,7 +142,7 @@ class TicTacToe(base.Game):
         for o_pos in self._list_o_pos:
             pygame.draw.circle(self._screen, "black", o_pos, 60, width=4)
 
-        if self._current_player == -4:
+        if self._state.is_terminal():
             rewards = self._state.rewards()
             if rewards[0] == 0 and rewards[1] == 0:
                 self._draw_text(f"DRAW", (0, 0, 0), 220, 300)

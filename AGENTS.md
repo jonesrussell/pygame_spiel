@@ -7,19 +7,24 @@ Use `python -B -W error -m unittest discover -s tests -v` from the repository ro
 
 Package paths below are relative to `pygame_spiel/`.
 
-- `games/base.py` owns OpenSpiel state and controller construction; concrete games
-  own rendering/mouse mapping. `games/settings.py` owns game/menu constants.
-- `main.py` owns the display/event loop; `menu.py` owns selection; `utils.py`
-  owns the developer Python bot-file loader. These import runtime dependencies.
+- `config.py` owns immutable settings, validation and explicit seeds.
+- `controllers.py` owns the custom Python bot-file registry, construction and cleanup.
+- `games/base.py` owns OpenSpiel state and controller lifetime; concrete games
+  own rendering/mouse mapping. OpenSpiel owns turn order and game rules.
+- `main.py` owns entry points and the display/event loop; `menu.py` owns selection.
 - `resources.py` owns read-only image lookup and external model/cache paths.
   Lookup must not write. `downloads.py` alone fetches/extracts models explicitly.
-- `bots/dqn.py` imports TensorFlow eagerly through the game base. Do not mark it
-  optional until every ordinary import consumer supports that boundary.
+- `bots/dqn.py` alone owns the TensorFlow graph/session; load it only for DQN.
+  Keep neural and download dependencies optional at their selected-use boundaries.
 
 OpenSpiel owns game rules and legal actions. Do not duplicate them in a renderer.
 Do not introduce downloads or mutable package-directory writes during imports,
-resource lookup or construction. Display creation currently occurs in constructors;
-keep unit checks on explicit doubles and qualify real backends separately.
+resource lookup or game/controller construction. Importing configuration, registry,
+resources, menu, entry points or renderers must not load runtime backends; Menu
+construction is also backend-free. `GameFactory.create` loads OpenSpiel
+and controllers; `open_display`/`close` bound display/resource lifetime. `--no-menu`
+opens a display and is not headless execution. Keep unit checks on explicit doubles
+and qualify real backends separately. See [extension contracts](docs/extending.md).
 
 When replacing an implementation, migrate all consumers, delete the replaced
 implementation, and remove tests/fixtures/assets whose sole consumer disappeared.

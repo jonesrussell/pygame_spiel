@@ -1,14 +1,139 @@
-# Extension APIs
+# Extending the application
 
-Install the [runtime dependencies](installation.md) before importing game APIs.
-Game imports eagerly load Pygame, OpenSpiel and TensorFlow. Constructing a game
-opens a display; resource helpers alone are safe without those backends.
+This guide describes configuration and the developer APIs for the two supported
+games. Install the [declared dependencies](installation.md) before constructing
+games or loading Python bot files.
+
+## Configuration
+
+Create and validate a configuration without opening a display or loading a model:
+
+```python
+from pygame_spiel.config import (
+    ControllerConfig, GameConfig, PresentationConfig, SessionConfig, validate_session,
+)
+from pygame_spiel.resources import ModelPaths
+
+config = SessionConfig(
+    game=GameConfig("tic_tac_toe"),
+    controllers=(
+        ControllerConfig(0, "human"),
+        ControllerConfig(1, "mcts", seed=123, parameters={"max_simulations": 200}),
+    ),
+    presentation=PresentationConfig(fps=10),
+    paths=ModelPaths(),
+)
+validate_session(config)
+```
+
+| Object | Contract |
+| --- | --- |
+| `GameConfig` | `tic_tac_toe` uses its default board; Breakthrough accepts only default 8x8 `rows`/`columns` parameters |
+| `ControllerConfig` | Binds a controller name, parameters, seed and optional model path to a player ID |
+| `PresentationConfig` | Sets frame limit and window caption; renderer geometry is fixed |
+| `ModelPaths` | Resolves an external cache and its checkpoint path without creating directories |
+| `SessionConfig` | Combines the settings and requires one controller each for IDs 0 and 1, sorted by player ID |
+
+Tic Tac Toe uses a 600x600 window and a 3x3 board; Breakthrough uses a 1200x1200
+window and an 8x8 board. Other game names, geometry and player counts are rejected.
+`validate_session(config, registered_bots)` also checks custom names/signatures
+and DQN checkpoint files before game/controller construction.
+
+Controller parameters are detached immutable value trees: string-keyed mappings,
+plain lists/tuples and `None`, boolean, integer, float, string, bytes or native
+`pathlib.Path` leaves. Constructors receive independent ordinary containers,
+preserving list versus tuple types. `parameters_for_constructor()` returns such
+a copy. Container sharing/identity is not retained. Cycles, non-string mapping
+keys and arbitrary objects such as arrays, sets, RNGs or resource handles are
+rejected. Create controller-owned resources in the constructor.
+
+## Built-in controller settings
+
+Random, MCTS and DQN configurations require explicit integer seeds from 0 through
+4294967295. Each random/MCTS controller owns its own NumPy `RandomState`.
+`SessionConfig()` defaults to human player 0 and MCTS player 1 with seed 43.
+Seeds describe controller configuration; they do not guarantee reproducibility
+across dependency/hardware versions or frame-driven turn schedules.
+
+| MCTS parameter | Default | Accepted value |
+| --- | --- | --- |
+| `uct_c` | `2.0` | Finite nonnegative number |
+| `max_simulations` | `1000` | Integer at least 2 |
+| `rollout_count` | `1` | Positive integer |
+| `solve` | `True` | Boolean |
+| `verbose` | `False` | Boolean |
+
+DQN is available for Breakthrough with the TensorFlow extra. Its session
+configuration requires an explicit external `model_path`; for the default user
+cache, use `paths = ModelPaths()` and `model_path=paths.breakthrough_dqn()`.
+See [model preparation](installation.md#models-and-cache-paths) for directory and
+checkpoint-file requirements.
+
+| DQN parameter | Default | Accepted value |
+| --- | --- | --- |
+| `hidden_layers_sizes` | `(64, 64)` | Nonempty list/tuple of positive integers |
+| `replay_buffer_capacity` | `100000` | Positive integer |
+| `batch_size` | `32` | Positive integer |
+
+The DQN adapter owns its TensorFlow graph/session and uses OpenSpiel's default
+information-state/observation representation selection. Agents are constructed
+in player order to match the variable naming used by
+[OpenSpiel's Breakthrough checkpoint example](https://github.com/google-deepmind/open_spiel/blob/v1.3/open_spiel/python/examples/breakthrough_dqn.py).
+Checkpoint restoration requires real-backend qualification.
+
+## Application and resource lifetime
+
+To let the application own the display and event loop, run the configuration
+above in an environment with the required backends and display:
+
+```python
+from pygame_spiel.main import run
+
+run(config)
+```
+
+For construction without a display:
+
+```python
+from pygame_spiel.games.factory import GameFactory
+
+game = GameFactory.create(config)
+try:
+    print(game.config.game.name)
+finally:
+    game.close()
+```
+
+`GameFactory.create` loads OpenSpiel and constructs controllers. It creates no
+window and downloads no models. The `Game` base owns the OpenSpiel game/state
+and controller lifetime. OpenSpiel determines legal actions, turn order and
+terminal state. Each concrete game class handles drawing and mouse mapping.
+
+A manual frame driver must call `game.open_display()`, handle its own Pygame
+events, call `game.play(mouse_pos, mouse_pressed)` and eventually `game.close()`.
+The application `run()` function manages that lifetime for callers. Closing a
+game releases controller resources and its Pygame display.
+
+Packaged images are resolved independently of the working directory:
+
+```python
+from pygame_spiel.resources import asset
+
+with asset("tic_tac_toe/x_image.png").open("rb") as stream:
+    signature = stream.read(8)
+```
+
+Treat package resources as read-only. Use external user-owned paths for mutable
+files; [cache selection](installation.md#models-and-cache-paths) belongs to
+`ModelPaths`. Only the explicit downloader fetches checkpoints.
 
 ## Python bot files
 
-Custom Python files are the developer extension for testing algorithms. Loading a
-file executes its code. Define a `pyspiel.Bot` subclass with keyword-compatible
-`game` and `player_id` constructor arguments:
+Python file loading is a developer extension: selecting a module executes its
+code. It accepts locally defined `pyspiel.Bot` subclasses; built-in names are
+reserved and imported classes are excluded. Use code you intend to execute.
+
+Save this as `first_legal.py` in your working directory:
 
 ```python
 import pyspiel
@@ -23,52 +148,57 @@ class FirstLegal(pyspiel.Bot):
         return actions[0] if actions else pyspiel.INVALID_ACTION
 ```
 
-Save as `first_legal.py`. In the menu's **Module** selector, navigate to that file,
-select it, then choose **FirstLegal** in **Opponent** and select **Play**. Use a
-self-contained file defining the bot class. The loader in `utils.register_classes`
-discovers subclasses; avoid importing unrelated Bot subclasses into the file.
-Bots receive the full state of the current perfect-information game. This extension
-does not provide external policy information boundaries or a named-opponent roster.
+From a source checkout, the included [Dummy example](../pygame_spiel/bots/dummy.py)
+can also be selected in **Module** to register `Dummy` through the same loader.
 
-## Programmatic game setup
+The constructor must accept `game` and `player_id`. Extra configured parameters
+are keyword arguments. If a custom seed is configured, the constructor must also
+accept `seed`. An optional `close()` method releases controller-owned resources.
+The [OpenSpiel random bot](https://github.com/google-deepmind/open_spiel/blob/v1.3/open_spiel/python/bots/uniform_random.py)
+illustrates the bot interface.
 
-`GameFactory.get_game(name, current_player)` constructs one of the two fixed board
-games and opens its display. The supported application uses `current_player=0`.
-Call `register_bots(mapping)` before `set_bots`; the menu supplies that mapping.
-For a manually driven display, handle events, call `game.play(mouse_pos,
-mouse_pressed)`, flip the display and release Pygame when finished.
+In the menu's **Module** selector, navigate to `first_legal.py`, select it, then
+choose `FirstLegal` in **Opponent** and select **Play**. Replacing the module
+replaces its registry; changing games preserves that registry and clears an
+incompatible opponent selection.
 
-```python
-import pygame
-from pygame_spiel.games.factory import GameFactory
-from pygame_spiel.resources import ModelPaths
-
-game = GameFactory.get_game("breakthrough", current_player=0)
-try:
-    game.register_bots({})
-    game.set_bots("human", None, "dqn", ModelPaths().breakthrough_dqn())
-    # A manual driver supplies the Pygame frame/event loop here.
-finally:
-    pygame.quit()
-```
-
-DQN parameters accept a checkpoint directory or `None` for the default external
-cache. Non-DQN parameter arguments have no effect. Checkpoint construction and
-restoration require backend qualification. MCTS/random use an internal seed of 42;
-there is no public seed configuration in this API.
-
-## Resources
-
-Use package images independently of the current working directory:
+For programmatic loading, use the same file with typed configuration:
 
 ```python
-from pygame_spiel.resources import asset
+from pygame_spiel.config import ControllerConfig, GameConfig, SessionConfig, validate_session
+from pygame_spiel.controllers import register_classes
+from pygame_spiel.main import run
 
-with asset("tic_tac_toe/x_image.png").open("rb") as stream:
-    signature = stream.read(8)
+registry = register_classes("first_legal.py")
+config = SessionConfig(
+    game=GameConfig("tic_tac_toe"),
+    controllers=(ControllerConfig(0, "human"), ControllerConfig(1, "FirstLegal")),
+)
+validate_session(config, registry)
+run(config, registered_bots=registry)
 ```
 
-`asset` returns an `importlib.resources` Traversable, including ZIP imports.
-`ModelPaths` owns external cache lookup; `user_path` rejects package-directory
-writes. See [cache selection](installation.md#models-and-cache-paths). Only
-`downloads.download_weights` and its command-line entry point fetch models.
+Custom bots receive full OpenSpiel state in the current perfect-information
+games. Hidden-information policy interfaces and a named-opponent experience
+belong to the [session/controller plan](next_milestone.md).
+
+## Convenience APIs
+
+- `GameFactory.get_game(name, current_player=0)` constructs a game with default
+  session settings. Only `current_player=0` is accepted; controller bindings
+  choose who drives each seat, and OpenSpiel owns turn order.
+- `game.register_bots(mapping)` validates and replaces the custom registry.
+  A replacement must include any custom controller selected by the active configuration.
+- `game.set_bots(bot1_type, bot1_params, bot2_type, bot2_params)` configures players
+  0 and 1 through the same typed settings. Parameter dictionaries accept `seed`;
+  DQN accepts `model_path` or a checkpoint path as its params argument. The method
+  constructs the replacement pair, installs it and closes the old controllers.
+
+These convenience calls are supported for the two current games. Prefer
+`GameFactory.create(SessionConfig(...))` for explicit construction.
+
+## Source checks
+
+See [Contributing](../CONTRIBUTING.md) for the test environment and standard
+unittest command. Tests use explicit backend doubles and do not qualify real
+runtime or checkpoint compatibility.
