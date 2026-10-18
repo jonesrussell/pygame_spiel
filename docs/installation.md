@@ -1,36 +1,85 @@
 # Installation
 
-## Just play
-If the user just wants to play with the algorithms and games available by default, without changing or adding extra functionalities to Pygame_spiel or OpenSpiel, they can just install the PyPI package and run the game. To install Pygame_spiel run:
+## Prerequisites
+
+Use Python 3.10+ and a local graphical display. Python 3.10/3.11 are the intended
+setup targets for the legacy dependency pins; metadata does not guarantee wheels
+on every Python version or operating system.
+
+| Dependency | Requirement | Purpose |
+| --- | --- | --- |
+| Pygame | `2.5.0` | Display and input |
+| pygame-menu | `4.4.3` | Selection menu |
+| NumPy | `>=1.23.5,<2` | Controllers; TensorFlow may narrow this range |
+| TensorFlow | `2.13.0` | Eagerly imported DQN adapter, including MCTS-only launches |
+| OpenSpiel | API target `1.3` | Rules and bots; supply locally or use `[spiel]` |
+| gdown | `5.2.2`, optional `[download]` | Explicit checkpoint download |
+
+## Install
+
+From the repository root, choose one OpenSpiel workflow.
+
+For the pinned convenience dependency:
+
 ```bash
-pip install pygame_spiel[spiel]
+python -m pip install ".[spiel]"
 ```
-Adding the parameter **[spiel]** within square brackets forces pip to install OpenSpiel as a dependency. OpenSpiel is not installed by default, because the main use case in PyGame_spiel is to support users who are working on a local clone of OpenSpiel, and by specifying it as dependency, the PyPI installation of OpenSpiel would override the local one.
 
-NOTE: if you're using a zsh terminal, specify pygame_spiel[spiel] within single quotes:
+For an existing local OpenSpiel source build:
+
 ```bash
-pip install 'pygame_spiel[spiel]'
+python -m pip install .
 ```
 
-To launch Pygame_spiel run:
+The second command does not request an OpenSpiel distribution and therefore does
+not ask the resolver to replace a research build. Provide importable `pyspiel`
+and `open_spiel` from a local 1.3-compatible build; see
+[OpenSpiel source installation](https://github.com/google-deepmind/open_spiel/blob/v1.3/docs/install.md).
+This preserves the installation choice, not a compatibility claim for arbitrary
+OpenSpiel versions. Local modifications need their own integration checks.
+
+PEP 517 builds use setuptools 84.0.0 and wheel 0.48.0 from
+[pyproject.toml](../pyproject.toml). The Python minimum matches the backend and ZIP
+resource APIs. Transitive runtime dependencies are not fully locked. The
+[contributor setup](../CONTRIBUTING.md) installs a smaller source-check environment.
+
+## Models and cache paths
+
+The application reads models from external user-owned storage and never downloads
+them during game construction. With download support installed, explicitly fetch
+the upstream Breakthrough archive:
+
 ```bash
-pygame_spiel
+python -m pip install ".[download]"
+python -m pygame_spiel.downloads breakthrough
 ```
 
-## With the local version of OpenSpiel
-If you are working with a OpenSpiel source code locally, you can install PyGame_spiel as an extra library for local development. There are two ways to install PyGame_spiel: 1) clone the repo and install it, 2) via pip install.
+The downloader prints the checkpoint path and refuses an existing destination.
+`pygame_spiel_download` is the equivalent installed command. For an alternate cache:
 
-### Install via pip
-If the user only needs to experiment with new algorithms, and no additional games or changes in the GUI are required, the best way to install Pygame_spiel is via pip install. Unlike with the installation in the previous section, when working with an existing version of OpenSpiel installed locally, run the following:
 ```bash
-pip install 'pygame_spiel'
+python -m pygame_spiel.downloads breakthrough --cache-dir /path/to/cache
 ```
-Here we don't specify the parameter **[spiel]**, since we don't want to override the local version of OpenSpiel with the library from pip. Here we assume that OpenSpiel is already installed locally via pip (as explained in secion 4 in [OpenSpiel Installation tutorial](https://github.com/google-deepmind/open_spiel/blob/master/docs/install.md)).
 
-### Clone the repo
-If you want to customize PyGame_spiel while also working on a local version of OpenSpiel, the simplest way is to clone the repository and install it.
-1) Clone pygame_spiel
-2) run pip install .
-3) run pygame_spiel from terminal as usual to launch it
+Set `PYGAME_SPIEL_CACHE_DIR` to that same directory before launching the menu.
+Without an override, Windows uses `%LOCALAPPDATA%/pygame_spiel` (fallback
+`~/AppData/Local/pygame_spiel`), macOS uses `~/Library/Caches/pygame_spiel`, and Linux
+uses `$XDG_CACHE_HOME/pygame_spiel` (fallback `~/.cache/pygame_spiel`). Checkpoints
+live below `models/dqn/breakthrough/weights_default`. Lookup creates no directories.
+Paths resolving within the `pygame_spiel` package are rejected. Packaged PNGs are
+read-only resources accessed through `importlib.resources`.
 
-By cloning the repo the user full access to the code, and the possibility to modify any part of the code (including the graphical UI and elements).
+The Python `set_bots` API also accepts an external DQN checkpoint directory;
+see [extension APIs](extending.md). An absent checkpoint fails locally with an
+explicit preparation command. Archive availability/integrity and restoration are
+unqualified; only download code invoked explicitly can contact the archive host.
+
+## Qualification limits
+
+Real OpenSpiel/Pygame/menu integration, display behavior and checkpoint restoration
+are unqualified. Source/unit tests use explicit doubles and do not certify any
+Python/platform/backend combination. Python 3.10 matches the declared minimum;
+minimum-version integration has not been established. TensorFlow 2.13 imposes
+additional platform/Python/NumPy constraints; provision a compatible environment
+before using the application. No dependency compatibility follows from a package
+archive building successfully. See [backend qualification](../CONTRIBUTING.md#backend-qualification).
