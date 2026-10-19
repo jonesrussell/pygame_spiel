@@ -1,28 +1,33 @@
-# Pygame_spiel
+# Pygame_spiel: Pygame-based UI to play board Reinforcement Learning games from OpenSpiel
+PygameSpiel is a [Pygame](https://www.pygame.org)-based library to play board games from the library [OpenSpiel](https://github.com/google-deepmind/open_spiel) against AI algorithms.
 
-A Pygame interface for OpenSpiel board games, created by Giovanni Ortolani.
-Play Tic Tac Toe or 8x8 Breakthrough against MCTS, or Breakthrough against a
-prepared TensorFlow DQN checkpoint. Custom Python `pyspiel.Bot` files provide
-a developer extension for testing algorithms.
 
-Python 3.10+, NumPy, Pygame, pygame-menu, TensorFlow and an OpenSpiel installation
-are required. Playing needs a local graphical display. OpenSpiel is an explicit
-installation choice so researchers can use their source build.
+Pygame_spiel provides a graphical UI interface to play games from the library [OpenSpiel](https://github.com/google-deepmind/open_spiel). While by default Pygame_spiel allows to play against a few existing algorithms from OpenSpiel, it also enables users who are working with OpenSpiel to quickly test new algorithms. With this in mind, Pygame_spiel offers the possibility to plugin new BOTs in runtime for quick testing.
 
-After [installation](docs/installation.md), open the menu with:
+Python 3.10+ and a local graphical display are required. See the
+[installation guide](docs/installation.md) for dependencies and checkpoint setup,
+and its [qualification limits](docs/installation.md#qualification-limits).
 
-```bash
-pygame_spiel
-```
+## Index
+* [Installation](docs/installation.md)
+* [Get started](docs/get_started.md)
+* [Extension APIs](docs/extending.md)
+* [Contributing](CONTRIBUTING.md)
 
-- [Getting started](docs/get_started.md): menu and mouse controls.
-- [Extension APIs](docs/extending.md): custom Python bot files and resource paths.
-- [Contributing](CONTRIBUTING.md): portable source/package checks and backend limits.
-- [Agent instructions](AGENTS.md): owners and change rules.
+## Overview
 
-The application supports two fixed-size, sequential perfect-information games.
-Controllers run synchronously in the display loop. Real backend/display integration
-and checkpoint restoration remain unqualified.
+Use your mouse to select the cell (tic tac toe) or select pawn and destination cell (breakthrough).
+
+![breakthrough_tic_tac_toe](https://github.com/giogix2/pygame_spiel/assets/5859539/dd5f8709-f383-497e-8317-a113ca50d1e7)
+
+## Version 1.0.0
+Games currently available:
+* Breakthrough
+* Tic Tac Toe
+
+AI algorithms available:
+* mcts, DQN (currently only for breakthrough)
+
+**more to come...**
 
 [MIT](LICENSE). Copyright (c) 2023 Giovanni Ortolani.
-Upstream: [giogix2/pygame_spiel](https://github.com/giogix2/pygame_spiel).
