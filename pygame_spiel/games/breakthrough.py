@@ -1,4 +1,3 @@
-import pygame
 import typing as t
 import math
 
@@ -6,30 +5,29 @@ from pygame_spiel.games import base
 
 
 class Breakthrough(base.Game):
-    def __init__(self, name, current_player):
-        super().__init__(name, current_player)
-
-        self._player_color = "b" if self._current_player == 0 else "w"
+    def __init__(self, config, registered_bots=None):
+        if config.game.name != "breakthrough":
+            raise ValueError("Breakthrough requires a breakthrough GameConfig")
+        super().__init__(config, registered_bots)
         self._n_rows, self._n_cols, self._n_directions = 8, 8, 6
-
-        # Load images
-        self._background = self._load_image("breakthrough/chess_board.png")
-        self._pawn_white = self._load_image("breakthrough/pawn_white.png")
-        self._pawn_white_selected = self._load_image("breakthrough/pawn_white_selected.png")
-        self._pawn_black = self._load_image("breakthrough/pawn_black.png")
-
-        self._pawn_white = pygame.transform.scale(self._pawn_white, (95, 95))
-        self._pawn_white_selected = pygame.transform.scale(
-            self._pawn_white_selected, (95, 95)
-        )
-        self._pawn_black = pygame.transform.scale(self._pawn_black, (95, 95))
-
-        self._selected_row, self._selected_col = None, None
-
         # Next two lists are from (lines 36-40):
         # https://github.com/google-deepmind/open_spiel/blob/efa004d8c5f5088224e49fdc198c5d74b6b600d0/open_spiel/games/breakthrough.cc#L36
         self._k_dir_row_offsets = [1, 1, 1, -1, -1, -1]
         self._k_dir_col_offsets = [-1, 0, 1, -1, 0, 1]
+        self._selected_row, self._selected_col = None, None
+
+    def _load_assets(self):
+        self._background = self._load_image("breakthrough/chess_board.png")
+        self._pawn_white = self._load_image("breakthrough/pawn_white.png")
+        self._pawn_white_selected = self._load_image("breakthrough/pawn_white_selected.png")
+        self._pawn_black = self._load_image("breakthrough/pawn_black.png")
+        self._pawn_white = self._pygame.transform.scale(self._pawn_white, (95, 95))
+        self._pawn_white_selected = self._pygame.transform.scale(self._pawn_white_selected, (95, 95))
+        self._pawn_black = self._pygame.transform.scale(self._pawn_black, (95, 95))
+
+    @property
+    def _player_color(self):
+        return "b" if self._current_player == 0 else "w"
 
     def _convert_mouse_position_to_grid(
         self, mouse_pos: t.Tuple[int, int]
@@ -96,7 +94,7 @@ class Breakthrough(base.Game):
             player_color (str): player's color
 
         Returns:
-            dir (int): token's direction (value between 0 and 5)
+            dir (int): direction from 0 to 5, or 7 for an invalid column offset
         """
 
         directions = {"b": [0, 1, 2], "w": [3, 4, 5]}
@@ -115,7 +113,7 @@ class Breakthrough(base.Game):
         """
         Converts the action value to a the position and values used to get the position and direction of the pawn.
 
-        Example: _unrank_action_mixed_base(2) = [1, 0, 1, 0]
+        Example: _unrank_action_mixed_base(2) = [0, 0, 1, 0]
         Example: _unrank_action_mixed_base(100) = [1, 0, 2, 0]
 
         This function is currently not used, but it's useful for debugging purposes, which is why is kept in this file.
@@ -192,6 +190,7 @@ class Breakthrough(base.Game):
         in open_spiel represents each possible action with a unique integer id, which is uniquely
         linked to the token's current and destination position.
 
+        Check the returned candidate against state.legal_actions() before applying it.
         To better understand the logic in this function, please refer to the following links in open_spiel
         which have been used as inspiration:
         * https://github.com/deepmind/open_spiel/blob/efa004d8c5f5088224e49fdc198c5d74b6b600d0/open_spiel/spiel_utils.cc#L50-L64
@@ -205,7 +204,7 @@ class Breakthrough(base.Game):
             token (str): token in the destination cell (can be ".", "w" or "b")
 
         Returns:
-            action (int): breakthrough's unique action id
+            action (int or None): candidate action id, or None for an invalid offset
         """
 
         if abs(selected_pawn_row - dest_row) > 1:
@@ -262,42 +261,34 @@ class Breakthrough(base.Game):
         return x, y
 
     def play(self, mouse_pos, mouse_pressed):
-        if (
-            (self._current_player == 0 and self._player_color == "b")
-            or (self._current_player == 1 and self._player_color == "w")
-        ) and (mouse_pressed[0]):
-            row, col = self._convert_mouse_position_to_grid(mouse_pos)
-            token = self._state_string[self._get_token_by_position(row, col)]
-            if self._selected_row is None and token == self._player_color:
-                self._selected_row, self._selected_col = row, col
-            elif self._selected_row is not None and token == self._player_color:
-                self._selected_row, self._selected_col = None, None
-            elif self._selected_row is not None and token != self._player_color:
-                # A pawn has been selected. If no other pawn is chosen, do not change assignment.
-                action = self._from_action_string_to_int(
-                    self._selected_row, self._selected_col, row, col, token
-                )
-                if action is not None and action in self._state.legal_actions():
-                    self._state.apply_action(action)
-                    self._bots[1].inform_action(
-                        self._state, self._current_player, action
-                    )
-                    self._selected_row, self._selected_col = None, None
-        elif (self._current_player == 1 and self._player_color == "b") or (
-            self._current_player == 0 and self._player_color == "w"
-        ):
-            action = self._bots[1].step(self._state)
-            self._state.apply_action(action)
-
-        self._current_player = self._state.current_player()
-        self._state_string = self._state.to_string()
+        if not self._state.is_terminal():
+            if self._is_human():
+                if mouse_pressed[0]:
+                    row, col = self._convert_mouse_position_to_grid(mouse_pos)
+                    if 0 <= row < self._n_rows and 0 <= col < self._n_cols:
+                        token = self._state_string[self._get_token_by_position(row, col)]
+                        if token == self._player_color:
+                            if (row, col) == (self._selected_row, self._selected_col):
+                                self._selected_row, self._selected_col = None, None
+                            else:
+                                self._selected_row, self._selected_col = row, col
+                        elif self._selected_row is not None:
+                            action = self._from_action_string_to_int(
+                                self._selected_row, self._selected_col, row, col, token
+                            )
+                            if action is not None and action in self._state.legal_actions():
+                                self._apply_action(action)
+                                self._selected_row, self._selected_col = None, None
+            else:
+                self._apply_action(self._bots[self._current_player].step(self._state))
 
         # Visualization
         self._screen.blit(self._background, (0, 0))
 
+        state_string = self._state_string
         for row in range(8):
             for col in range(8):
-                token = self._state_string[self._get_token_by_position(row, col)]
+                token = state_string[self._get_token_by_position(row, col)]
                 x, y = self._get_coordinates_by_position(row, col)
 
                 if token == "b":

@@ -3,6 +3,8 @@
 import ast
 from pathlib import Path
 import re
+import subprocess
+import sys
 import unittest
 from urllib.parse import unquote, urlsplit
 
@@ -37,3 +39,25 @@ class DocumentationTests(unittest.TestCase):
             for path in folder.rglob("*.py"):
                 with self.subTest(path=path.relative_to(ROOT)):
                     ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+
+    def test_cli_help_needs_no_runtime_backends(self):
+        guard = '''
+import importlib.abc, runpy, sys
+class Block(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname, *args):
+        if fullname.split('.')[0] in ('pygame','pygame_menu','pyspiel','open_spiel','tensorflow','torch','gdown','numpy'):
+            raise AssertionError('Unexpected backend import: ' + fullname)
+sys.meta_path.insert(0, Block())
+route = sys.argv[1]
+sys.argv = [route, '--help']
+if route == 'main.py':
+    runpy.run_path(route, run_name='__main__')
+else:
+    runpy.run_module(route, run_name='__main__')
+'''
+        for route in ('pygame_spiel.main', 'main.py', 'pygame_spiel.downloads'):
+            with self.subTest(route=route):
+                result = subprocess.run([sys.executable, '-B', '-c', guard, route],
+                                        cwd=ROOT, capture_output=True, text=True, timeout=15)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn('--help', result.stdout)

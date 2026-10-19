@@ -1,6 +1,0 @@
-GAMES_BOTS = {
-    "tic_tac_toe": {"mcts": []},
-    "breakthrough": {"mcts": [], "dqn": ["breakthrough_weights"]},
-}
-
-SCREEN_SIZE = {"tic_tac_toe": [600, 600], "breakthrough": [1200, 1200]}

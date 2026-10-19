@@ -2,8 +2,8 @@
 
 This source checkout requires Python 3.10+ and a local graphical display.
 Runtime dependencies are Pygame 2.5.0, pygame-menu 4.4.3, NumPy `>=1.23.5,<2`,
-TensorFlow 2.13.0 and an OpenSpiel 1.3-compatible build. TensorFlow is imported
-even for MCTS-only launches and may narrow the supported Python/NumPy versions.
+and an OpenSpiel 1.3-compatible build. TensorFlow is optional for DQN;
+random and MCTS controllers do not import its adapter.
 Metadata does not guarantee dependency wheels on every platform or interpreter.
 
 Package-name commands below install the published PyPI release. To use this
@@ -50,6 +50,19 @@ from [pyproject.toml](../pyproject.toml). The Python minimum covers the build
 backend and ZIP resource APIs. Transitive runtime dependencies are not fully
 locked. See [Contributing](../CONTRIBUTING.md) for source-check dependencies.
 
+## Optional DQN support
+
+From the repository root, install TensorFlow support if you will use DQN:
+
+```bash
+python -m pip install ".[tensorflow]"
+```
+
+This extra provides TensorFlow 2.13.0, with additional platform/Python/NumPy
+constraints. Selecting DQN imports OpenSpiel's TensorFlow v1 adapter, which
+disables TensorFlow v2 behavior in that process. Checkpoint restoration requires
+separate qualification.
+
 ## Models and cache paths
 
 The source application reads checkpoints from external user-owned storage.
@@ -76,10 +89,19 @@ live below `models/dqn/breakthrough/weights_default`. `ModelPaths(cache_dir=...)
 selects the cache in Python. Lookup creates no directories; paths resolving
 inside the `pygame_spiel` package are rejected.
 
+The application's `--cache-dir` overrides the environment/default cache.
+`--model-path` selects a checkpoint directory independently of that cache:
+
+```bash
+python -m pygame_spiel.main --no-menu --game breakthrough --opponent dqn --model-path /path/to/checkpoint
+```
+
 For an existing game, `game.set_bots("human", None, "dqn", "/path/to/checkpoint")`
-selects an external DQN checkpoint directory for player 1. Pass `None` instead
-of a path to use the default cache, as the menu does. An absent checkpoint
-fails locally with an explicit preparation command. DQN is Breakthrough-only.
+selects an external DQN checkpoint directory for player 1. The Python API requires
+an explicit DQN path or `model_path` parameter; the CLI/menu resolve the default
+cache for their callers. Validation requires `q_network_pidN` and
+`target_q_network_pidN` index/data files for the selected player (CLI opponent 1).
+DQN is Breakthrough-only. See [configuration and lifetime](extending.md).
 
 Packaged PNGs are read-only resources accessed through `importlib.resources`:
 

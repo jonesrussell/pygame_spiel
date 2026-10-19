@@ -11,6 +11,7 @@ and its [qualification limits](docs/installation.md#qualification-limits).
 ## Index
 * [Installation](docs/installation.md)
 * [Get started](docs/get_started.md)
+* [Extension APIs](docs/extending.md)
 * [Contributing](CONTRIBUTING.md)
 
 ## Overview
@@ -19,13 +20,14 @@ Use your mouse to select the cell (tic tac toe) or select pawn and destination c
 
 ![breakthrough_tic_tac_toe](https://github.com/giogix2/pygame_spiel/assets/5859539/dd5f8709-f383-497e-8317-a113ca50d1e7)
 
-## Version 1.0.0
+## Games and controllers
 Games currently available:
 * Breakthrough
 * Tic Tac Toe
 
-AI algorithms available:
-* mcts, DQN (currently only for breakthrough)
+Controllers available:
+* Human, random and MCTS
+* TensorFlow DQN (Breakthrough only; optional TensorFlow extra)
 
 **more to come...**
 

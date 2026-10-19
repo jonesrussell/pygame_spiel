@@ -9,6 +9,6 @@ class Dummy(pyspiel.Bot):
     def step(self, state):
         legal_actions = state.legal_actions(self._player_id)
         if not legal_actions:
-            return [], pyspiel.INVALID_ACTION
+            return pyspiel.INVALID_ACTION
         action = legal_actions[0]  # Always choose 1st action
         return action

@@ -19,7 +19,9 @@ artifacts are not traversed or copied. The same staging check runs on the unpack
 source archive without Git. New source/data directories need an explicit selection
 in `tests/test_packaging.py`.
 It checks packaged source/assets/license, metadata, ZIP resource lookup, a source
-archive roundtrip, documentation links/example syntax and explicit consumer doubles.
+archive roundtrip, documentation links/example syntax, immutable configuration,
+controller/display lifetime and explicit backend doubles. CLI help and pure imports
+are guarded against runtime backend imports.
 Build tests need the declared setuptools/wheel versions. A missing tool is a setup
 failure, not a skipped successful package check.
 
@@ -29,8 +31,8 @@ they do not install the graphical/neural application dependencies.
 
 For application development, follow [installation](docs/installation.md), including
 the choice between a local OpenSpiel build and `[spiel]`. See
-[bot-file extension](docs/get_started.md#register-a-new-bot) and
-[agent guidance](AGENTS.md) for owners.
+[bot-file extension](docs/get_started.md#register-a-new-bot),
+[extension APIs](docs/extending.md) and [agent guidance](AGENTS.md) for owners.
 Keep tests and necessary user/API documentation with the code they verify.
 
 ## Backend qualification

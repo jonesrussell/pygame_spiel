@@ -11,8 +11,36 @@ From a source checkout, `python main.py` invokes the same menu.
 
 If the user just wants to play with the available Bots and games, the procedure is simple. After launching PygameSpiel, the main menu appears showing Game and Opponent dropdown menus which include the available games and Bots. Simply select the game and BOT and click play.
 
+The default is Breakthrough against MCTS. Player 0 uses the mouse, and
+**Opponent** controls player 1. Choose **random** or **human** as alternatives;
+with **human**, both players use the mouse in turn. Close the window to exit.
+
 For DQN, prepare the Breakthrough checkpoint as described in
 [model setup](installation.md#models-and-cache-paths) before selecting Play.
+
+## Start a game directly
+
+The module launcher accepts the same options as `pygame_spiel` and `python main.py`:
+
+```bash
+python -m pygame_spiel.main --no-menu --game tic_tac_toe --opponent random --seed 42
+```
+
+`--no-menu` skips selection and opens the game display. Controller work and turn
+advancement run synchronously during rendering; frame rate affects their pace.
+The CLI opponent uses the base seed plus player ID 1, so this example uses seed 43.
+
+| Option | Meaning |
+| --- | --- |
+| `--game` | `tic_tac_toe` or `breakthrough`; default `breakthrough` |
+| `--opponent` | `mcts`, `random`, `human`, or Breakthrough-only `dqn`; default `mcts` |
+| `--seed` | Base integer seed from 0 through 4294967294; default 42 |
+| `--fps` | Frame limit from 1 through 240; default 10 |
+| `--cache-dir` | Override the [user cache](installation.md#models-and-cache-paths) |
+| `--model-path` | Select an external DQN checkpoint directory |
+| `--help` | Show usage without opening a display or importing runtime backends |
+
+For Python configuration and display lifetime, see [Extension APIs](extending.md).
 
 ## Register a new bot
 Custom Python bot files are the developer extension for testing algorithms.

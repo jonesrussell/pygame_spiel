@@ -1,56 +1,84 @@
-#!/usr/bin/env python
+"""Application entry point: selections, explicit display and event lifetime."""
 
-import pygame
+import argparse
+from pathlib import Path
 
-from pygame_spiel.games.settings import GAMES_BOTS
+from pygame_spiel.config import (
+    DEFAULT_SEED, MAX_SEED, GAME_SIZES, GameConfig, PresentationConfig, SessionConfig,
+    default_controller, validate_session,
+)
 from pygame_spiel.games.factory import GameFactory
-from pygame_spiel.menu import Menu
+from pygame_spiel.resources import ModelPaths
 
 
-def select_game(game, index):
-    pass
-
-
-def pygame_spiel():
-    menu = Menu()
-    menu.display()
-    game_name = menu.get_selected_game()
-    bot_type = menu.get_selected_opponent()
-    registered_bots = menu.get_registered_bots()
-
-    player_id = 0
-
-    list_available_bots = list(GAMES_BOTS[game_name].keys()) + list(
-        registered_bots.keys()
+def parse_args(argv=None):
+    defaults = SessionConfig()
+    parser = argparse.ArgumentParser(description="Play Tic Tac Toe or Breakthrough with OpenSpiel controllers")
+    parser.add_argument("--game", choices=tuple(GAME_SIZES), default=defaults.game.name)
+    parser.add_argument("--opponent", choices=("mcts", "random", "human", "dqn"),
+                        default=defaults.controllers[1].kind)
+    parser.add_argument("--seed", type=int, default=DEFAULT_SEED,
+                        help="Base seed; built-in opponent uses seed + player_id")
+    parser.add_argument("--model-path", type=Path)
+    parser.add_argument("--cache-dir", type=Path)
+    parser.add_argument("--fps", type=int, default=defaults.presentation.fps)
+    parser.add_argument("--no-menu", action="store_true")
+    args = parser.parse_args(argv)
+    if not 0 <= args.seed < MAX_SEED:
+        raise ValueError(f"Base seed must be between 0 and {MAX_SEED - 1} (opponent uses seed + 1)")
+    paths = ModelPaths(args.cache_dir) if args.cache_dir else ModelPaths()
+    model = args.model_path
+    if args.opponent == "dqn" and model is None:
+        model = paths.breakthrough_dqn()
+    config = SessionConfig(
+        game=GameConfig(args.game),
+        controllers=(default_controller(0, "human"), default_controller(
+            1, args.opponent, {"seed": args.seed + 1}, model,
+        )),
+        presentation=PresentationConfig(fps=args.fps), paths=paths,
     )
-    assert (
-        bot_type in list_available_bots
-    ), f"""Bot type {bot_type} not available for game {game_name}. List of 
-        available bots: {list_available_bots}"""
+    validate_session(config)
+    return config, args.no_menu
 
-    game = GameFactory.get_game(game_name, current_player=player_id)
-    game.register_bots(registered_bots)
-    game.set_bots(
-        bot1_type="human",
-        bot1_params=None,
-        bot2_type=bot_type,
-        bot2_params=None,
-    )
 
-    done = False
-    clock = pygame.time.Clock()
+def run(config: SessionConfig, registered_bots=None):
+    """Programmatic entry point; all construction succeeds before display setup."""
+    game = GameFactory.create(config, registered_bots)
+    try:
+        game.open_display()
+        pygame = game._pygame
+        clock = pygame.time.Clock()
+        done = False
+        while not done:
+            clock.tick(config.presentation.fps)
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    done = True
+            if done:
+                break
+            game.play(pygame.mouse.get_pos(), pygame.mouse.get_pressed())
+            pygame.display.flip()
+    finally:
+        game.close()
 
-    while not done:
-        clock.tick(10)
 
-        events = pygame.event.get()
-        for event in events:
-            if event.type == pygame.QUIT:
-                done = True
+def pygame_spiel(argv=None):
+    config, no_menu = parse_args(argv)
+    if no_menu:
+        run(config)
+        return
+    from pygame_spiel.menu import Menu
 
-        mouse_pos = pygame.mouse.get_pos()
-        mouse_pressed = pygame.mouse.get_pressed()
+    menu = Menu(config)
+    try:
+        selected = menu.display()
+    finally:
+        import pygame
 
-        game.play(mouse_pos=mouse_pos, mouse_pressed=mouse_pressed)
+        pygame.quit()
+    if selected is not None:
+        run(selected, menu.get_registered_bots())
 
-        pygame.display.flip()
+
+if __name__ == "__main__":
+    pygame_spiel()

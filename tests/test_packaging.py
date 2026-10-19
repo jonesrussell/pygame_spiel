@@ -26,7 +26,7 @@ def stage_source(source, destination):
         "README.md", "AGENTS.md", "CONTRIBUTING.md", "requirements-test.txt",
         ".github/workflows/checks.yml", "pygame_spiel/__init__.py",
         "pygame_spiel/bots/__init__.py", "pygame_spiel/games/__init__.py",
-        "docs/installation.md", "docs/get_started.md",
+        "docs/installation.md", "docs/get_started.md", "docs/extending.md",
         "docs/images/module_dropdown_1.png", "docs/images/module_dropdown_2.png",
         "docs/images/module_dropdown_3.png",
         "tests/test_packaging.py", "pygame_spiel/images/tic_tac_toe/x_image.png",
@@ -61,7 +61,7 @@ class StagingTests(unittest.TestCase):
             "pygame_spiel/bots/__init__.py", "pygame_spiel/bots/example.py",
             "pygame_spiel/games/__init__.py", "pygame_spiel/games/example.py",
             "pygame_spiel/main.py", "docs/installation.md", "docs/get_started.md",
-            "docs/next_milestone.md", "tests/test_packaging.py",
+            "docs/extending.md", "docs/next_milestone.md", "tests/test_packaging.py",
             "docs/images/module_dropdown_1.png", "docs/images/module_dropdown_2.png",
             "docs/images/module_dropdown_3.png",
             "tests/support.py", "pygame_spiel/images/tic_tac_toe/x_image.png",
@@ -157,7 +157,8 @@ backend.build_wheel(destination)
                     n for n in names if n.endswith(".dist-info/METADATA"))))
                 self.assertEqual(metadata["Requires-Python"], ">=3.10")
                 requirements = metadata.get_all("Requires-Dist")
-                self.assertIn('tensorflow==2.13.0', requirements)
+                self.assertIn('tensorflow==2.13.0; extra == "tensorflow"', requirements)
+                self.assertFalse(any(r.startswith("tensorflow") and ";" not in r for r in requirements))
                 self.assertIn('open-spiel==1.3; extra == "spiel"', requirements)
                 self.assertFalse(any(r.startswith("open-spiel") and ";" not in r for r in requirements))
                 self.assertIn('gdown==5.2.2; extra == "download"', requirements)
@@ -215,6 +216,23 @@ sys.path.insert(0, sys.argv[1])
 import pygame_spiel
 assert sys.argv[1] in pygame_spiel.__file__, pygame_spiel.__file__
 from pygame_spiel.resources import asset, ModelPaths
+from pygame_spiel.config import ControllerConfig, SessionConfig, validate_session
+from pygame_spiel.controllers import build_controller
+from pygame_spiel.games.factory import GameFactory
+import pygame_spiel.main, pygame_spiel.menu
+import pygame_spiel.games.tic_tac_toe, pygame_spiel.games.breakthrough
+validate_session(SessionConfig())
+original = {'choices': ['first']}
+config = ControllerConfig(1, 'Custom', parameters={'options': original})
+original['choices'].append('caller mutation')
+class Custom:
+    def __init__(self, game, player_id, options):
+        self.initial = options['choices'][:]
+        options['choices'].append('constructor mutation')
+class Game:
+    def num_players(self): return 2
+for _ in range(2):
+    assert build_controller(Game(), config, {'Custom': Custom}).initial == ['first']
 for name in sys.argv[2:]:
     assert asset(name).read_bytes().startswith(b'\x89PNG')
 ModelPaths()
