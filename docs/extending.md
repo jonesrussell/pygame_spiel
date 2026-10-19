@@ -133,23 +133,10 @@ Python file loading is a developer extension: selecting a module executes its
 code. It accepts locally defined `pyspiel.Bot` subclasses; built-in names are
 reserved and imported classes are excluded. Use code you intend to execute.
 
-Save this as `first_legal.py` in your working directory:
-
-```python
-import pyspiel
-
-class FirstLegal(pyspiel.Bot):
-    def __init__(self, game, player_id):
-        super().__init__()
-        self.player_id = player_id
-
-    def step(self, state):
-        actions = state.legal_actions(self.player_id)
-        return actions[0] if actions else pyspiel.INVALID_ACTION
-```
-
-From a source checkout, the included [Dummy example](../pygame_spiel/bots/dummy.py)
-can also be selected in **Module** to register `Dummy` through the same loader.
+The [getting-started bot example and menu walkthrough](get_started.md#register-a-new-bot)
+show how to define and register `Dummy`. Save that example as `dummy.py` for the
+programmatic example below. From a source checkout, the included
+[Dummy example](../pygame_spiel/bots/dummy.py) can also be selected in **Module**.
 
 The constructor must accept `game` and `player_id`. Extra configured parameters
 are keyword arguments. If a custom seed is configured, the constructor must also
@@ -157,10 +144,8 @@ accept `seed`. An optional `close()` method releases controller-owned resources.
 The [OpenSpiel random bot](https://github.com/google-deepmind/open_spiel/blob/v1.3/open_spiel/python/bots/uniform_random.py)
 illustrates the bot interface.
 
-In the menu's **Module** selector, navigate to `first_legal.py`, select it, then
-choose `FirstLegal` in **Opponent** and select **Play**. Replacing the module
-replaces its registry; changing games preserves that registry and clears an
-incompatible opponent selection.
+Replacing the module in the menu replaces its registry; changing games
+preserves that registry and clears an incompatible opponent selection.
 
 For programmatic loading, use the same file with typed configuration:
 
@@ -169,10 +154,10 @@ from pygame_spiel.config import ControllerConfig, GameConfig, SessionConfig, val
 from pygame_spiel.controllers import register_classes
 from pygame_spiel.main import run
 
-registry = register_classes("first_legal.py")
+registry = register_classes("dummy.py")
 config = SessionConfig(
     game=GameConfig("tic_tac_toe"),
-    controllers=(ControllerConfig(0, "human"), ControllerConfig(1, "FirstLegal")),
+    controllers=(ControllerConfig(0, "human"), ControllerConfig(1, "Dummy")),
 )
 validate_session(config, registry)
 run(config, registered_bots=registry)
