@@ -10,6 +10,10 @@ class Breakthrough(base.Game):
             raise ValueError("Breakthrough requires a breakthrough GameConfig")
         super().__init__(config, registered_bots)
         self._n_rows, self._n_cols, self._n_directions = 8, 8, 6
+        # Next two lists are from (lines 36-40):
+        # https://github.com/google-deepmind/open_spiel/blob/efa004d8c5f5088224e49fdc198c5d74b6b600d0/open_spiel/games/breakthrough.cc#L36
+        self._k_dir_row_offsets = [1, 1, 1, -1, -1, -1]
+        self._k_dir_col_offsets = [-1, 0, 1, -1, 0, 1]
         self._selected_row, self._selected_col = None, None
 
     def _load_assets(self):
@@ -57,10 +61,12 @@ class Breakthrough(base.Game):
 
     def _get_token_by_position(self, row: int, col: int) -> int:
         """
-        Return a cell's character offset in OpenSpiel's fixed 8x8 board string.
+        Returns the token position given the tokens row and column.
 
-        Each row has a rank label, eight cells and a newline. This renderer
-        depends on that layout when mapping row/column coordinates to text.
+        This function is used to simplify the mapping of the token position
+        in the grid. Open_spiel uses an integer number to represent the position
+        of a token in the grid, but it's sometimes simpler to represent the position
+        as a row/column coordinate.
 
         Parameters:
             row (int): Token's row
@@ -103,6 +109,71 @@ class Breakthrough(base.Game):
             dir = 7  # Invalid direction
         return dir
 
+    def _unrank_action_mixed_base(self, action: int) -> t.List[int]:
+        """
+        Converts the action value to a the position and values used to get the position and direction of the pawn.
+
+        Example: _unrank_action_mixed_base(2) = [0, 0, 1, 0]
+        Example: _unrank_action_mixed_base(100) = [1, 0, 2, 0]
+
+        This function is currently not used, but it's useful for debugging purposes, which is why is kept in this file.
+        This function is a copy of:
+        https://github.com/google-deepmind/open_spiel/blob/efa004d8c5f5088224e49fdc198c5d74b6b600d0/open_spiel/spiel_utils.cc#L69
+
+        Parameters:
+            action (int): player's action.
+
+        Returns:
+            digits (list): list containing 4 values
+        """
+
+        action_bases = [self._n_rows, self._n_rows, self._n_directions, 2]
+        digits = [0] * len(action_bases)
+        for i in range(len(action_bases) - 1, -1, -1):
+            digits[i] = action % action_bases[i]
+            action //= action_bases[i]
+        return digits
+
+    def _action_to_string(self, action: int) -> str:
+        """
+        Converts the action value to a string representing start and end position.
+
+        Example: _action_to_string(2) = a8a7
+        Example: _action_to_string(100) = a7b6
+
+        This function is currently not used, but it's useful for debugging purposes, which is why is kept in this file.
+        This function is a copy of:
+        https://github.com/google-deepmind/open_spiel/blob/efa004d8c5f5088224e49fdc198c5d74b6b600d0/open_spiel/games/breakthrough.cc#L196
+
+        Parameters:
+            action (int): player's action.
+
+        Returns:
+            digits (str): start/end position of the player
+        """
+
+        values = self._unrank_action_mixed_base(action)
+        r1, c1 = values[0], values[1]
+        dir = values[2]
+        capture = values[3] == 1
+        r2 = r1 + self._k_dir_row_offsets[dir]
+        c2 = c1 + self._k_dir_col_offsets[dir]
+
+        def col_label(col: int) -> str:
+            return chr(ord("a") + col)
+
+        def row_label(row: int) -> str:
+            return chr(ord("1") + self._n_rows - 1 - row)
+
+        action_string = ""
+        action_string += col_label(c1)
+        action_string += row_label(r1)
+        action_string += col_label(c2)
+        action_string += row_label(r2)
+        action_string += "*" if capture else ""
+
+        return action_string
+
     def _from_action_string_to_int(
         self,
         selected_pawn_row: int,
@@ -120,7 +191,8 @@ class Breakthrough(base.Game):
         linked to the token's current and destination position.
 
         Check the returned candidate against state.legal_actions() before applying it.
-        OpenSpiel's action encoding is defined in:
+        To better understand the logic in this function, please refer to the following links in open_spiel
+        which have been used as inspiration:
         * https://github.com/deepmind/open_spiel/blob/efa004d8c5f5088224e49fdc198c5d74b6b600d0/open_spiel/spiel_utils.cc#L50-L64
         * https://github.com/deepmind/open_spiel/blob/efa004d8c5f5088224e49fdc198c5d74b6b600d0/open_spiel/games/breakthrough.cc#L243
 

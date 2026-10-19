@@ -13,7 +13,6 @@ and its [qualification limits](docs/installation.md#qualification-limits).
 * [Get started](docs/get_started.md)
 * [Extension APIs](docs/extending.md)
 * [Contributing](CONTRIBUTING.md)
-* [Session and controller plan](docs/next_milestone.md)
 
 ## Overview
 

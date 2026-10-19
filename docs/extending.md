@@ -114,18 +114,8 @@ events, call `game.play(mouse_pos, mouse_pressed)` and eventually `game.close()`
 The application `run()` function manages that lifetime for callers. Closing a
 game releases controller resources and its Pygame display.
 
-Packaged images are resolved independently of the working directory:
-
-```python
-from pygame_spiel.resources import asset
-
-with asset("tic_tac_toe/x_image.png").open("rb") as stream:
-    signature = stream.read(8)
-```
-
-Treat package resources as read-only. Use external user-owned paths for mutable
-files; [cache selection](installation.md#models-and-cache-paths) belongs to
-`ModelPaths`. Only the explicit downloader fetches checkpoints.
+For package image lookup and external model/cache paths, see
+[installation](installation.md#models-and-cache-paths).
 
 ## Python bot files
 
@@ -164,8 +154,8 @@ run(config, registered_bots=registry)
 ```
 
 Custom bots receive full OpenSpiel state in the current perfect-information
-games. Hidden-information policy interfaces and a named-opponent experience
-belong to the [session/controller plan](next_milestone.md).
+games. This interface does not provide hidden-information policy boundaries,
+remote controllers or a named-opponent selection experience.
 
 ## Convenience APIs
 
@@ -181,9 +171,3 @@ belong to the [session/controller plan](next_milestone.md).
 
 These convenience calls are supported for the two current games. Prefer
 `GameFactory.create(SessionConfig(...))` for explicit construction.
-
-## Source checks
-
-See [Contributing](../CONTRIBUTING.md) for the test environment and standard
-unittest command. Tests use explicit backend doubles and do not qualify real
-runtime or checkpoint compatibility.
