@@ -11,7 +11,6 @@ and its [qualification limits](docs/installation.md#qualification-limits).
 ## Index
 * [Installation](docs/installation.md)
 * [Get started](docs/get_started.md)
-* [Extension APIs](docs/extending.md)
 * [Contributing](CONTRIBUTING.md)
 
 ## Overview

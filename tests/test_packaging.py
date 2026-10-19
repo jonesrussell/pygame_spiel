@@ -26,7 +26,9 @@ def stage_source(source, destination):
         "README.md", "AGENTS.md", "CONTRIBUTING.md", "requirements-test.txt",
         ".github/workflows/checks.yml", "pygame_spiel/__init__.py",
         "pygame_spiel/bots/__init__.py", "pygame_spiel/games/__init__.py",
-        "docs/installation.md", "docs/get_started.md", "docs/extending.md",
+        "docs/installation.md", "docs/get_started.md",
+        "docs/images/module_dropdown_1.png", "docs/images/module_dropdown_2.png",
+        "docs/images/module_dropdown_3.png",
         "tests/test_packaging.py", "pygame_spiel/images/tic_tac_toe/x_image.png",
         "pygame_spiel/images/breakthrough/chess_board.png",
         "pygame_spiel/images/breakthrough/pawn_black.png",
@@ -59,7 +61,9 @@ class StagingTests(unittest.TestCase):
             "pygame_spiel/bots/__init__.py", "pygame_spiel/bots/example.py",
             "pygame_spiel/games/__init__.py", "pygame_spiel/games/example.py",
             "pygame_spiel/main.py", "docs/installation.md", "docs/get_started.md",
-            "docs/extending.md", "docs/next_milestone.md", "tests/test_packaging.py",
+            "docs/next_milestone.md", "tests/test_packaging.py",
+            "docs/images/module_dropdown_1.png", "docs/images/module_dropdown_2.png",
+            "docs/images/module_dropdown_3.png",
             "tests/support.py", "pygame_spiel/images/tic_tac_toe/x_image.png",
             "pygame_spiel/images/breakthrough/chess_board.png",
             "pygame_spiel/images/breakthrough/pawn_black.png",
@@ -83,7 +87,7 @@ class StagingTests(unittest.TestCase):
                     (source / ".git").write_text("gitdir: unused")
                 excluded = [source / name for name in (
                     ".venv", "local-evidence", ".cache", "pygame_spiel/__pycache__",
-                    "pygame_spiel/.venv", "docs/.cache", "tests/local-artifacts",
+                    "pygame_spiel/.venv", "docs/.cache", "docs/images/.cache", "tests/local-artifacts",
                     "pygame_spiel/images/local-artifacts")]
                 for directory in excluded:
                     (directory / "site-packages").mkdir(parents=True)
@@ -112,7 +116,8 @@ class StagingTests(unittest.TestCase):
 
     def test_missing_required_inputs_fail_before_copying(self):
         for missing in ("pyproject.toml", "MANIFEST.in", "LICENSE", "README.md",
-                        "docs/get_started.md", "pygame_spiel/games/__init__.py",
+                        "docs/get_started.md", "docs/images/module_dropdown_2.png",
+                        "pygame_spiel/games/__init__.py",
                         "pygame_spiel/images/breakthrough/pawn_black.png",
                         "requirements-test.txt", ".github/workflows/checks.yml",
                         "tests/test_packaging.py", "main.py"):
@@ -215,7 +220,8 @@ for name in sys.argv[2:]:
 ModelPaths()
 """
             images = sorted(p.relative_to("pygame_spiel/images").as_posix()
-                            for p in inputs if p.suffix == ".png")
+                            for p in inputs if p.parts[:2] == ("pygame_spiel", "images")
+                            and p.suffix == ".png")
             result = subprocess.run([sys.executable, "-B", "-c", code, str(wheel), *images],
                                     cwd=tmp, capture_output=True, text=True, timeout=15)
             self.assertEqual(result.returncode, 0, result.stderr)

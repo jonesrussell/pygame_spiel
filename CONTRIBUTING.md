@@ -29,7 +29,8 @@ they do not install the graphical/neural application dependencies.
 
 For application development, follow [installation](docs/installation.md), including
 the choice between a local OpenSpiel build and `[spiel]`. See
-[extension APIs](docs/extending.md) and [agent guidance](AGENTS.md) for owners.
+[bot-file extension](docs/get_started.md#register-a-new-bot) and
+[agent guidance](AGENTS.md) for owners.
 Keep tests and necessary user/API documentation with the code they verify.
 
 ## Backend qualification
